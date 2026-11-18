@@ -19,6 +19,7 @@
   #toolbar .group { display: flex; align-items: center; gap: 4px; }
   #toolbar label { white-space: nowrap; }
   #toolbar input[type="number"] { width: 90px; }
+  #type-search { width: 110px; }
   #type-filter { min-width: 140px; height: 28px; }
   #search-input { width: 180px; }
   #view-toggle button {
@@ -139,6 +140,7 @@
   </div>
   <div class="group">
     <label for="type-filter">ประเภทโรงงาน:</label>
+    <input type="text" id="type-search" placeholder="ค้นหาประเภท..." oninput="filterTypeOptions()">
     <select id="type-filter" multiple onchange="onFilterChange()"></select>
   </div>
   <div class="group">
@@ -168,6 +170,7 @@ const FACTORIES = /*__FACTORIES__*/ [];
 const PROVINCES_GEOJSON = /*__PROVINCES_GEOJSON__*/ {"type":"FeatureCollection","features":[]};
 const DISTRICTS_GEOJSON = /*__DISTRICTS_GEOJSON__*/ {"type":"FeatureCollection","features":[]};
 const META = /*__META__*/ {"type_codes":[],"provinces":[],"hp_registered_max":0,"hp_inspected_max":0};
+const SUBDISTRICT_CENTROIDS = /*__SUBDISTRICT_CENTROIDS__*/ [];
 
 let currentLevel = 'province';
 let currentProvince = null;
@@ -178,6 +181,74 @@ const expandedGroups = new Set();
 
 const map = L.map('map').setView([18.3, 99.6], 7);
 let geoLayer = null;
+let dotLayer = null;
+
+function dotRadius(count) {
+  if (count <= 0) return 0;
+  return Math.min(4 + Math.sqrt(count) * 1.4, 36);
+}
+
+function clearDotLayer() {
+  if (dotLayer) {
+    map.removeLayer(dotLayer);
+    dotLayer = null;
+  }
+}
+
+function addDot(lat, lon, count, label) {
+  if (count <= 0 || lat === undefined || lon === undefined) return;
+  // interactive: false so the dot never blocks clicks/hover meant for the
+  // polygon underneath it (the polygon already carries the tooltip).
+  const marker = L.circleMarker([lat, lon], {
+    radius: dotRadius(count),
+    color: '#08306b',
+    weight: 1,
+    fillColor: '#f03b20',
+    fillOpacity: 0.65,
+    interactive: false,
+  });
+  dotLayer.addLayer(marker);
+}
+
+function renderDots(factories) {
+  clearDotLayer();
+  dotLayer = L.layerGroup().addTo(map);
+
+  if (currentLevel === 'province') {
+    for (const feature of PROVINCES_GEOJSON.features) {
+      const province = feature.properties.pro_th;
+      addDot(feature.properties.lat, feature.properties.lon,
+        countForProvince(factories, province), province);
+    }
+    return;
+  }
+
+  if (currentLevel === 'district' && currentProvince && !currentDistrict) {
+    for (const feature of DISTRICTS_GEOJSON.features) {
+      if (feature.properties.pro_th !== currentProvince) continue;
+      const amphoe = feature.properties.amp_th;
+      addDot(feature.properties.lat, feature.properties.lon,
+        countForDistrict(factories, currentProvince, amphoe), amphoe);
+    }
+    return;
+  }
+
+  if (currentLevel === 'district' && currentProvince && currentDistrict) {
+    const inDistrict = factories.filter(
+      f => f.province === currentProvince && f.amphoe === currentDistrict
+    );
+    const countByTambon = {};
+    for (const f of inDistrict) {
+      const key = f.tambon || '';
+      countByTambon[key] = (countByTambon[key] || 0) + 1;
+    }
+    for (const centroid of SUBDISTRICT_CENTROIDS) {
+      if (centroid.province !== currentProvince || centroid.amphoe !== currentDistrict) continue;
+      const count = countByTambon[centroid.tambon] || 0;
+      addDot(centroid.lat, centroid.lon, count, centroid.tambon);
+    }
+  }
+}
 
 function getColor(count) {
   if (count === 0) return '#eeeeee';
@@ -222,6 +293,7 @@ function renderProvinceLevel(factories) {
       });
     }
   }).addTo(map);
+  renderDots(factories);
   renderSidebar(factories);
 }
 
@@ -241,6 +313,7 @@ function renderDistrictLevel(factories) {
       layer.bindTooltip(`${feature.properties.amp_th}: ${count} โรงงาน`);
       layer.on('click', () => {
         currentDistrict = feature.properties.amp_th;
+        renderDots(factories);
         renderSidebar(factories);
       });
     }
@@ -248,6 +321,7 @@ function renderDistrictLevel(factories) {
   if (geoLayer.getBounds().isValid()) {
     map.fitBounds(geoLayer.getBounds());
   }
+  renderDots(factories);
   renderSidebar(factories);
 }
 
@@ -376,6 +450,20 @@ function populateTypeFilter() {
     select.appendChild(option);
   }
 }
+
+function filterTypeOptions() {
+  const search = document.getElementById('type-search').value.trim().toLowerCase();
+  const select = document.getElementById('type-filter');
+  for (const option of select.options) {
+    option.hidden = search !== '' && !option.value.toLowerCase().includes(search);
+  }
+}
+
+// Keep the map's view stable (same geographic center) whenever its
+// container changes size — window resize, minimize/restore, or the
+// sidebar/toolbar reflowing the layout.
+new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById('map'));
+window.addEventListener('resize', () => map.invalidateSize());
 
 function updateHpModeUI() {
   const mode = document.getElementById('hp-mode').value;
