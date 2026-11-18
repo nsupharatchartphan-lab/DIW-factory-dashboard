@@ -435,10 +435,16 @@ function groupKey(province, amphoe) {
 }
 
 function renderTable(factories) {
+  // Seed every (province, amphoe) group from the full FACTORIES set, not
+  // just the filtered one, so a district with zero matches still shows
+  // a row (count 0) instead of disappearing from the table.
   const groups = {};
-  for (const f of factories) {
+  for (const f of FACTORIES) {
     const key = groupKey(f.province, f.amphoe);
     if (!groups[key]) groups[key] = { province: f.province, amphoe: f.amphoe, factories: [] };
+  }
+  for (const f of factories) {
+    const key = groupKey(f.province, f.amphoe);
     groups[key].factories.push(f);
   }
 
