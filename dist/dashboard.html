@@ -172,7 +172,7 @@
   #sidebar .back-btn {
     display: inline-flex;
     align-items: center;
-    margin-bottom: 14px;
+    margin: 0 8px 14px 0;
     padding: 6px 14px;
     background: var(--primary-soft);
     color: var(--primary-dark);
@@ -189,10 +189,18 @@
     padding: 12px;
     background: var(--bg);
     border-radius: var(--radius);
+    border: 1px solid var(--border);
   }
+  .tambon-group + .tambon-group { border-top: 2px solid var(--primary-soft); }
   .tambon-group h3 { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; font-weight: 600; }
-  .factory-item { font-size: 13px; margin-bottom: 8px; line-height: 1.4; }
-  .factory-item:last-child { margin-bottom: 0; }
+  .factory-item {
+    font-size: 13px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    line-height: 1.4;
+    border-bottom: 1px dashed var(--border);
+  }
+  .factory-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
   .factory-item .fname { color: var(--primary); cursor: pointer; font-weight: 600; }
   .factory-item .fname:hover { text-decoration: underline; }
   .factory-item .fbiz { color: var(--text-muted); }
@@ -648,6 +656,11 @@ function backToProvinceView() {
   renderMap(lastFactories);
 }
 
+function backToDistrictView() {
+  currentDistrict = null;
+  renderDistrictLevel(lastFactories);
+}
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return '';
   return String(value)
@@ -684,6 +697,7 @@ function renderSidebar(factories) {
 
   let html =
     `<button class="back-btn" onclick="backToProvinceView()">&larr; กลับไปมุมมองจังหวัด</button>` +
+    `<button class="back-btn" onclick="backToDistrictView()">&larr; กลับไปมุมมองอำเภอ</button>` +
     `<h2>${escapeHtml(currentProvince)} / ${escapeHtml(currentDistrict)}</h2>` +
     `<p class="hint">${matching.length} โรงงาน</p>`;
 
