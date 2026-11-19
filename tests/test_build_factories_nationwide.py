@@ -14,6 +14,7 @@ HEADERS = [
     "ไปรษณีย์", "โทรศัพท์", "เงินทุนรวม", "ค่าอาคาร", "ค่าที่ดิน", "ค่าเครื่องจักร",
     "ทุนหมุนเวียน", "คนงานชาย", "คนงานหญิง", "คนงานรวม", "แรงม้า", "แรงม้าตรวจพบ",
     "กำลังผลิต", "หน่วย", "ทะเบียนพาณิชย์", "เลขผู้เสียภาษี", "ประเภท",
+    "GPS_lat", "GPS_lng",
 ]
 
 
@@ -44,7 +45,8 @@ class TestLoadFactoriesFromWorkbook(unittest.TestCase):
         row = [1, "3-10(1)-6/55", None, 999, "โรงงานทดสอบ", "-", "ทดสอบ",
                "1", "-", "-", "ถนนทดสอบ", "ตำบลทดสอบ", "ลาดกระบัง",
                "กรุงเทพมหานคร", 10520, None, 0, 0, 0, 0, 0, 0, 0, 0,
-               138, 138, None, "ตัน/ปี", None, None, "-01001-"]
+               138, 138, None, "ตัน/ปี", None, None, "-01001-",
+               13.736717, 100.523186]
         path = _write_workbook([row])
         try:
             factories = load_factories_from_workbook(path)
@@ -58,6 +60,24 @@ class TestLoadFactoriesFromWorkbook(unittest.TestCase):
         self.assertEqual(factory["type_code"], "10(1)")
         self.assertEqual(factory["type_main"], "10")
         self.assertEqual(factory["hp_registered"], 138)
+        self.assertEqual(factory["gps_lat"], 13.736717)
+        self.assertEqual(factory["gps_lng"], 100.523186)
+
+    def test_discards_gps_outside_thailands_bounding_box(self):
+        row = [1, "3-10(1)-6/55", None, 999, "โรงงานทดสอบ", "-", "ทดสอบ",
+               "1", "-", "-", "ถนนทดสอบ", "ตำบลทดสอบ", "ลาดกระบัง",
+               "กรุงเทพมหานคร", 10520, None, 0, 0, 0, 0, 0, 0, 0, 0,
+               138, 138, None, "ตัน/ปี", None, None, "-01001-",
+               "-", "16/01/1470"]
+        path = _write_workbook([row])
+        try:
+            factories = load_factories_from_workbook(path)
+        finally:
+            os.remove(path)
+
+        factory = factories[0]
+        self.assertIsNone(factory["gps_lat"])
+        self.assertIsNone(factory["gps_lng"])
 
     def test_tags_fertiliser_factory_with_its_own_province_region(self):
         row = [1, "3-43(1)-11/64", None, 999, "โรงปุ๋ยทดสอบ", "-", "ผลิตปุ๋ย",

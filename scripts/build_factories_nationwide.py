@@ -27,7 +27,26 @@ HEADER_MAP = {
     "hp_inspected": "แรงม้าตรวจพบ",
     "commercial_reg": "ทะเบียนพาณิชย์",
     "tax_id": "เลขผู้เสียภาษี",
+    "gps_lat": "GPS_lat",
+    "gps_lng": "GPS_lng",
 }
+
+# Thailand's rough bounding box — some rows have GPS_lat/GPS_lng cells
+# shifted into other columns (stray text, dates) by inconsistent data
+# entry; this filters those out rather than passing junk coordinates
+# through to a map link.
+THAILAND_LAT_RANGE = (5.0, 21.0)
+THAILAND_LNG_RANGE = (95.0, 106.0)
+
+
+def _clean_gps(lat, lng):
+    if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
+        return None, None
+    if not (THAILAND_LAT_RANGE[0] < lat < THAILAND_LAT_RANGE[1]):
+        return None, None
+    if not (THAILAND_LNG_RANGE[0] < lng < THAILAND_LNG_RANGE[1]):
+        return None, None
+    return lat, lng
 
 
 def parse_type_code(old_reg_no: str) -> str:
@@ -73,6 +92,7 @@ def load_factories_from_workbook(path: str) -> list:
             continue
         type_code = parse_type_code(str(old_reg_no))
         province = row[columns["province"]]
+        gps_lat, gps_lng = _clean_gps(row[columns["gps_lat"]], row[columns["gps_lng"]])
         factory = {
             "fid": row[columns["fid"]],
             "old_reg_no": old_reg_no,
@@ -95,6 +115,8 @@ def load_factories_from_workbook(path: str) -> list:
             "type_main": type_main(type_code),
             "commercial_reg": _clean_str(row[columns["commercial_reg"]]),
             "tax_id": _clean_str(row[columns["tax_id"]]),
+            "gps_lat": gps_lat,
+            "gps_lng": gps_lng,
         }
         factories.append(factory)
     wb.close()

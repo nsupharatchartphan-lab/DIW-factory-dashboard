@@ -246,6 +246,16 @@
   #detail-card dl { margin: 0; }
   #detail-card dt { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
   #detail-card dd { margin: 2px 0 0; font-size: 14px; }
+  .maps-link {
+    display: inline-block;
+    margin: 6px 0 2px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--primary);
+    text-decoration: none;
+  }
+  .maps-link:hover { text-decoration: underline; }
+  .maps-pin { margin-left: 5px; text-decoration: none; font-size: 12px; }
 
   #table-view { display: none; height: calc(100vh - 61px); overflow-y: auto; padding: 20px; box-sizing: border-box; }
   #table-view table {
@@ -836,9 +846,12 @@ function renderSidebar(factories) {
   for (const tambon of Object.keys(byTambon).sort()) {
     html += `<div class="tambon-group" data-tambon="${escapeHtml(tambon)}"><h3>ต.${escapeHtml(tambon)}</h3>`;
     for (const f of byTambon[tambon]) {
+      const mapsUrl = googleMapsUrl(f);
       html +=
         `<div class="factory-item">` +
-        `<span class="fname" onclick="showFactoryDetail(${f.fid})">${escapeHtml(f.name)}</span><br>` +
+        `<span class="fname" onclick="showFactoryDetail(${f.fid})">${escapeHtml(f.name)}</span>` +
+        (mapsUrl ? `<a class="maps-pin" href="${mapsUrl}" target="_blank" rel="noopener" title="เปิดใน Google Maps">&#128205;</a>` : '') +
+        `<br>` +
         `<span class="fbiz">${escapeHtml(f.business)}</span><br>` +
         `<span class="fhp">แรงม้า: ${escapeHtml(f.hp_registered)}</span>` +
         `</div>`;
@@ -878,11 +891,21 @@ const DETAIL_FIELDS = [
   ['tax_id', 'เลขผู้เสียภาษี'],
 ];
 
+function googleMapsUrl(factory) {
+  if (factory.gps_lat == null || factory.gps_lng == null) return null;
+  return `https://www.google.com/maps?q=${factory.gps_lat},${factory.gps_lng}`;
+}
+
 function showFactoryDetail(fid) {
   const factory = FACTORIES.find(f => f.fid === fid);
   if (!factory) return;
 
-  let html = `<h2>${escapeHtml(factory.name)}</h2><dl>`;
+  let html = `<h2>${escapeHtml(factory.name)}</h2>`;
+  const mapsUrl = googleMapsUrl(factory);
+  if (mapsUrl) {
+    html += `<a class="maps-link" href="${mapsUrl}" target="_blank" rel="noopener">เปิดตำแหน่งใน Google Maps &#8599;</a>`;
+  }
+  html += `<dl>`;
   for (const [key, label] of DETAIL_FIELDS) {
     let value = factory[key] ?? '-';
     if (key === 'region' && REGION_LABELS[value]) value = REGION_LABELS[value];
@@ -1140,8 +1163,10 @@ function renderTambonBreakdown(factories) {
   for (const tambon of Object.keys(byTambon).sort()) {
     html += `<div class="tambon-block"><h4>ต.${escapeHtml(tambon)}</h4>`;
     for (const f of byTambon[tambon]) {
-      html += `<div><span class="fname" onclick="showFactoryDetail(${f.fid})">${escapeHtml(f.name)}</span> ` +
-        `&mdash; แรงม้า: ${escapeHtml(f.hp_registered)}</div>`;
+      const mapsUrl = googleMapsUrl(f);
+      html += `<div><span class="fname" onclick="showFactoryDetail(${f.fid})">${escapeHtml(f.name)}</span>` +
+        (mapsUrl ? `<a class="maps-pin" href="${mapsUrl}" target="_blank" rel="noopener" title="เปิดใน Google Maps">&#128205;</a>` : '') +
+        ` &mdash; แรงม้า: ${escapeHtml(f.hp_registered)}</div>`;
     }
     html += '</div>';
   }
