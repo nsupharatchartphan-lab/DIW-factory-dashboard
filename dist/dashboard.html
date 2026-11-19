@@ -448,13 +448,14 @@ function renderDots(factories) {
   }
 }
 
+// Coolwarm diverging scale: blue = fewer factories, red = more.
 function getColor(count) {
-  if (count === 0) return '#e7e3d8';
-  if (count < 100) return '#bfe3d6';
-  if (count < 250) return '#74c6ad';
-  if (count < 500) return '#2a9d7f';
-  if (count < 750) return '#187a63';
-  return '#0d4f40';
+  if (count === 0) return '#4575b4';
+  if (count < 100) return '#91bfdb';
+  if (count < 250) return '#e0f3f8';
+  if (count < 500) return '#fee090';
+  if (count < 750) return '#fc8d59';
+  return '#d73027';
 }
 
 function bindMapLabel(layer, name, count) {
