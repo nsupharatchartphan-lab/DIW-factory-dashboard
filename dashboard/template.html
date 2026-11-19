@@ -257,6 +257,26 @@
   #table-view .tambon-block h4 { font-size: 12px; color: var(--text-muted); margin: 0 0 6px; font-weight: 600; }
   #table-view .fname { color: var(--primary); cursor: pointer; font-weight: 500; }
   #table-view .fname:hover { text-decoration: underline; }
+
+  .map-legend {
+    background: var(--surface);
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .map-legend-title { font-weight: 600; margin-bottom: 4px; font-size: 12.5px; }
+  .map-legend-row { display: flex; align-items: center; gap: 6px; }
+  .map-legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.1);
+    flex: 0 0 auto;
+  }
 </style>
 </head>
 <body>
@@ -285,6 +305,7 @@
     <span id="hp-value-input" style="display:none">
       <input type="number" id="hp-value" placeholder="ค่า" onchange="onFilterChange()">
     </span>
+    <button type="button" class="clear-btn" onclick="clearHp()">ล้างคำค้นหา</button>
   </div>
   <div class="group">
     <label>ประเภทโรงงาน:</label>
@@ -375,10 +396,14 @@ function renderDots(factories) {
   dotLayer = L.layerGroup().addTo(map);
 
   if (currentLevel === 'province') {
-    for (const feature of PROVINCES_GEOJSON.features) {
+    // Dots at the province-overview level show district-level counts
+    // (not province totals) — the choropleth fill already encodes the
+    // province total, so the dots add the finer-grained detail.
+    for (const feature of DISTRICTS_GEOJSON.features) {
       const province = feature.properties.pro_th;
+      const amphoe = feature.properties.amp_th;
       addDot(feature.properties.lat, feature.properties.lon,
-        countForProvince(factories, province), province);
+        countForDistrict(factories, province, amphoe), amphoe);
     }
     return;
   }
@@ -660,11 +685,39 @@ function clearSearch() {
   onFilterChange();
 }
 
+function clearHp() {
+  document.getElementById('hp-min').value = '';
+  document.getElementById('hp-max').value = '';
+  document.getElementById('hp-value').value = '';
+  onFilterChange();
+}
+
 // Keep the map's view stable (same geographic center) whenever its
 // container changes size — window resize, minimize/restore, or the
 // sidebar/toolbar reflowing the layout.
 new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById('map'));
 window.addEventListener('resize', () => map.invalidateSize());
+
+// === Choropleth color-bar legend ===
+const colorLegend = L.control({ position: 'bottomright' });
+colorLegend.onAdd = function () {
+  const div = L.DomUtil.create('div', 'map-legend');
+  const grades = [
+    [0, '0'],
+    [1, '1-99'],
+    [100, '100-249'],
+    [250, '250-499'],
+    [500, '500-749'],
+    [750, '750+'],
+  ];
+  let html = '<div class="map-legend-title">จำนวนโรงงาน</div>';
+  for (const [threshold, label] of grades) {
+    html += `<div class="map-legend-row"><span class="map-legend-swatch" style="background:${getColor(threshold)}"></span>${label}</div>`;
+  }
+  div.innerHTML = html;
+  return div;
+};
+colorLegend.addTo(map);
 
 function updateHpModeUI() {
   const mode = document.getElementById('hp-mode').value;
