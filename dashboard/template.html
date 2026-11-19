@@ -379,6 +379,7 @@ const PROVINCES_GEOJSON = /*__PROVINCES_GEOJSON__*/ {"type":"FeatureCollection",
 const DISTRICTS_GEOJSON = /*__DISTRICTS_GEOJSON__*/ {"type":"FeatureCollection","features":[]};
 const META = /*__META__*/ {"type_codes":[],"provinces":[],"hp_registered_max":0,"hp_inspected_max":0};
 const SUBDISTRICT_CENTROIDS = /*__SUBDISTRICT_CENTROIDS__*/ [];
+const SUBDISTRICTS_GEOJSON = /*__SUBDISTRICTS_GEOJSON__*/ {"type":"FeatureCollection","features":[]};
 
 let currentLevel = 'province';
 let currentProvince = null;
@@ -390,6 +391,7 @@ const expandedGroups = new Set();
 const map = L.map('map').setView([18.3, 99.6], 7);
 let geoLayer = null;
 let dotLayer = null;
+let tambonBorderLayer = null;
 
 function dotRadius(count) {
   if (count <= 0) return 0;
@@ -404,6 +406,13 @@ function clearDotLayer() {
   if (dotLayer) {
     map.removeLayer(dotLayer);
     dotLayer = null;
+  }
+}
+
+function clearTambonBorderLayer() {
+  if (tambonBorderLayer) {
+    map.removeLayer(tambonBorderLayer);
+    tambonBorderLayer = null;
   }
 }
 
@@ -424,13 +433,14 @@ function addDot(lat, lon, count, label, color) {
 
 function renderDots(factories) {
   clearDotLayer();
+  clearTambonBorderLayer();
   dotLayer = L.layerGroup().addTo(map);
 
-  // Dots only appear once drilled into a single district (tambon level).
-  // At the province- and district-overview levels, the choropleth fill
-  // plus the permanent name labels already carry the information — a
-  // dot per polygon at those levels just produced a dense cluster of
-  // same-sized circles.
+  // Dots (and the tambon border layer below) only appear once drilled
+  // into a single district. At the province- and district-overview
+  // levels, the choropleth fill plus the permanent name labels already
+  // carry the information — a dot per polygon at those levels just
+  // produced a dense cluster of same-sized circles.
   if (currentLevel === 'district' && currentProvince && currentDistrict) {
     const inDistrict = factories.filter(
       f => f.province === currentProvince && f.amphoe === currentDistrict
@@ -445,6 +455,27 @@ function renderDots(factories) {
     );
     const maxCount = Math.max(0, ...tambonsHere.map(c => countByTambon[c.tambon] || 0));
     const scale = makeColorScale(maxCount);
+
+    // Tambon boundary outlines, lightly filled by the same scale as the
+    // dots — a second layer giving the actual sub-district shapes
+    // instead of just points, as requested.
+    const tambonFeatures = {
+      type: 'FeatureCollection',
+      features: SUBDISTRICTS_GEOJSON.features.filter(
+        f => f.properties.pro_th === currentProvince && f.properties.amp_th === currentDistrict
+      ),
+    };
+    tambonBorderLayer = L.geoJSON(tambonFeatures, {
+      style: feature => {
+        const count = countByTambon[feature.properties.tam_th] || 0;
+        return { fillColor: scale.colorFor(count), fillOpacity: 0.3, weight: 1.5, color: '#7c3f0a', dashArray: '4,3' };
+      },
+      onEachFeature: (feature, layer) => {
+        const count = countByTambon[feature.properties.tam_th] || 0;
+        layer.bindTooltip(`${feature.properties.tam_th}: ${count} โรงงาน`);
+      },
+    }).addTo(map);
+
     for (const centroid of tambonsHere) {
       const count = countByTambon[centroid.tambon] || 0;
       addDot(centroid.lat, centroid.lon, count, centroid.tambon, scale.colorFor(count));
@@ -693,9 +724,22 @@ document.getElementById('detail-overlay').addEventListener('click', e => {
 
 const selectedTypeCodes = new Set();
 
+// "10(3)" -> [10, 3], "105" -> [105, 0] — sorts the dropdown by the
+// factory type's actual number, not by how common it is.
+function parseTypeCodeForSort(code) {
+  const match = code.match(/^(\d+)(?:\((\d+)\))?/);
+  if (!match) return [Number.MAX_SAFE_INTEGER, 0];
+  return [parseInt(match[1], 10), match[2] ? parseInt(match[2], 10) : 0];
+}
+
 function populateTypeFilter() {
   const container = document.getElementById('type-options');
-  for (const { code, count } of META.type_codes) {
+  const sortedTypeCodes = [...META.type_codes].sort((a, b) => {
+    const [aMain, aSub] = parseTypeCodeForSort(a.code);
+    const [bMain, bSub] = parseTypeCodeForSort(b.code);
+    return aMain - bMain || aSub - bSub;
+  });
+  for (const { code, count } of sortedTypeCodes) {
     const row = document.createElement('label');
     row.className = 'type-option-row';
     row.dataset.code = code.toLowerCase();
