@@ -394,6 +394,7 @@ const DISTRICTS_GEOJSON = /*__DISTRICTS_GEOJSON__*/ {"type":"FeatureCollection",
 const META = /*__META__*/ {"type_codes":[],"provinces":[],"regions":[],"hp_registered_max":0,"hp_inspected_max":0};
 const SUBDISTRICT_CENTROIDS = /*__SUBDISTRICT_CENTROIDS__*/ [];
 const SUBDISTRICTS_GEOJSON = /*__SUBDISTRICTS_GEOJSON__*/ {"type":"FeatureCollection","features":[]};
+const REGIONS_GEOJSON = /*__REGIONS_GEOJSON__*/ {"type":"FeatureCollection","features":[]};
 
 let currentLevel = 'province';
 let currentProvince = null;
@@ -406,6 +407,29 @@ const map = L.map('map').setView([13.0, 101.0], 6);
 let geoLayer = null;
 let dotLayer = null;
 let tambonBorderLayer = null;
+let regionBoundaryLayer = null;
+
+function clearRegionBoundaryLayer() {
+  if (regionBoundaryLayer) {
+    map.removeLayer(regionBoundaryLayer);
+    regionBoundaryLayer = null;
+  }
+}
+
+// A thick, non-interactive outline around each region's combined area
+// (merged from its provinces), drawn in that region's own deep tone —
+// only shown at the country-wide province view, where it frames which
+// provinces belong to which region.
+function renderRegionBoundaries() {
+  clearRegionBoundaryLayer();
+  regionBoundaryLayer = L.geoJSON(REGIONS_GEOJSON, {
+    interactive: false,
+    style: feature => {
+      const colors = REGION_COLOR_SCALE_10[feature.properties.region] || REGION_COLOR_SCALE_10['กลาง'];
+      return { fillOpacity: 0, weight: 3, color: colors[8], dashArray: null };
+    },
+  }).addTo(map);
+}
 
 function dotRadius(count) {
   if (count <= 0) return 0;
@@ -604,6 +628,7 @@ function renderProvinceLevel(factories) {
   if (geoLayer.getBounds().isValid()) {
     map.fitBounds(geoLayer.getBounds());
   }
+  renderRegionBoundaries();
   updateLegendRegions('จังหวัด: จำนวนโรงงาน (แบ่งสีตามภาค)', scalesByRegion);
   renderDots(factories);
   renderSidebar(factories);
@@ -611,6 +636,7 @@ function renderProvinceLevel(factories) {
 
 function renderDistrictLevel(factories) {
   clearGeoLayer();
+  clearRegionBoundaryLayer();
 
   if (currentDistrict) {
     // A district has been picked: show only that one polygon, as a

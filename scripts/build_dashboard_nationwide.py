@@ -1,7 +1,20 @@
 import json
 import os
+import re
 
-from scripts.build_dashboard import inject
+PLACEHOLDER_NAMES = [
+    "FACTORIES", "PROVINCES_GEOJSON", "DISTRICTS_GEOJSON", "META",
+    "SUBDISTRICT_CENTROIDS", "SUBDISTRICTS_GEOJSON", "REGIONS_GEOJSON",
+]
+
+
+def inject(template: str, values: dict) -> str:
+    result = template
+    for name in PLACEHOLDER_NAMES:
+        pattern = re.compile(r"/\*__" + name + r"__\*/[^;]*;")
+        replacement = f"/*__{name}__*/ {json.dumps(values[name], ensure_ascii=False)};"
+        result = pattern.sub(lambda m: replacement, result, count=1)
+    return result
 
 
 def main():
@@ -19,9 +32,18 @@ def main():
         subdistrict_centroids = json.load(f)
     with open("data/boundaries/subdistricts_nationwide.geojson", encoding="utf-8") as f:
         subdistricts_geojson = json.load(f)
+    with open("data/boundaries/regions_nationwide.geojson", encoding="utf-8") as f:
+        regions_geojson = json.load(f)
 
-    result = inject(template, factories, meta, provinces_geojson, districts_geojson,
-                     subdistrict_centroids, subdistricts_geojson)
+    result = inject(template, {
+        "FACTORIES": factories,
+        "PROVINCES_GEOJSON": provinces_geojson,
+        "DISTRICTS_GEOJSON": districts_geojson,
+        "META": meta,
+        "SUBDISTRICT_CENTROIDS": subdistrict_centroids,
+        "SUBDISTRICTS_GEOJSON": subdistricts_geojson,
+        "REGIONS_GEOJSON": regions_geojson,
+    })
 
     os.makedirs("dist", exist_ok=True)
     with open("dist/dashboard_nationwide.html", "w", encoding="utf-8") as f:
