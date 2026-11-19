@@ -13,7 +13,8 @@ class TestRegions(unittest.TestCase):
 
     def test_known_province_assignments(self):
         self.assertEqual(region_for_province("เชียงใหม่"), "เหนือ")
-        self.assertEqual(region_for_province("กรุงเทพมหานคร"), "กลาง")
+        self.assertEqual(region_for_province("กรุงเทพมหานคร"), "กทม.")
+        self.assertEqual(region_for_province("นนทบุรี"), "กลาง")
         self.assertEqual(region_for_province("ชลบุรี"), "ตะวันออก")
         self.assertEqual(region_for_province("ขอนแก่น"), "ตะวันออกเฉียงเหนือ")
         self.assertEqual(region_for_province("สงขลา"), "ใต้")

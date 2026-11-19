@@ -54,7 +54,7 @@ class TestLoadFactoriesFromWorkbook(unittest.TestCase):
         self.assertEqual(len(factories), 1)
         factory = factories[0]
         self.assertEqual(factory["province"], "กรุงเทพมหานคร")
-        self.assertEqual(factory["region"], "กลาง")
+        self.assertEqual(factory["region"], "กทม.")
         self.assertEqual(factory["type_code"], "10(1)")
         self.assertEqual(factory["type_main"], "10")
         self.assertEqual(factory["hp_registered"], 138)
@@ -91,7 +91,7 @@ class TestBuildMeta(unittest.TestCase):
              "hp_registered": 100, "hp_inspected": 90},
             {"type_code": "43(1)", "province": "เชียงใหม่", "region": "เหนือ",
              "hp_registered": 50, "hp_inspected": None},
-            {"type_code": "10(1)", "province": "กรุงเทพมหานคร", "region": "กลาง",
+            {"type_code": "10(1)", "province": "กรุงเทพมหานคร", "region": "กทม.",
              "hp_registered": 200, "hp_inspected": 200},
         ]
         meta = build_meta(factories)
@@ -103,7 +103,7 @@ class TestBuildMeta(unittest.TestCase):
         self.assertEqual(province_counts["เชียงใหม่"], 2)
         region_counts = {r["name"]: r["count"] for r in meta["regions"]}
         self.assertEqual(region_counts["เหนือ"], 2)
-        self.assertEqual(region_counts["กลาง"], 1)
+        self.assertEqual(region_counts["กทม."], 1)
 
 
 if __name__ == "__main__":
