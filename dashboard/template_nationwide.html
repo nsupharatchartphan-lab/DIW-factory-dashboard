@@ -542,7 +542,10 @@ function makeColorScale(max, region) {
     region,
     colors,
     colorFor(count) {
-      if (count <= 0) return colors[0];
+      // Zero factories always renders plain white, whatever region
+      // the province/district/tambon belongs to — only an area with
+      // at least one factory gets its region's tone.
+      if (count <= 0) return '#ffffff';
       const idx = Math.min(Math.ceil(count / step) - 1, 9);
       return colors[Math.max(idx, 0)];
     },
@@ -896,6 +899,7 @@ function updateLegend(title, scale) {
   const isWhole = Number.isInteger(scale.step);
   const fmt = v => (isWhole ? Math.round(v) : Math.round(v * 10) / 10);
   let html = `<div class="map-legend-title">${escapeHtml(title)}</div>`;
+  html += `<div class="map-legend-row"><span class="map-legend-swatch" style="background:#ffffff"></span>ไม่มีโรงงาน</div>`;
   for (let i = 0; i < 10; i++) {
     const lo = fmt(i * scale.step);
     const hi = fmt((i + 1) * scale.step);
@@ -910,6 +914,7 @@ function updateLegend(title, scale) {
 function updateLegendRegions(title, scalesByRegion) {
   if (!legendDiv) return;
   let html = `<div class="map-legend-title">${escapeHtml(title)}</div>`;
+  html += `<div class="map-legend-row"><span class="map-legend-swatch" style="background:#ffffff"></span>ไม่มีโรงงาน</div>`;
   for (const region of REGION_ORDER) {
     const scale = scalesByRegion[region];
     if (!scale) continue;
