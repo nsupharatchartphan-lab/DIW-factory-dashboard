@@ -3,7 +3,6 @@ import json
 import requests
 
 from scripts.fetch_boundaries import filter_boundaries, round_coordinates
-from scripts.label_layout import add_label_positions
 from scripts.regions import ALL_PROVINCES, tag_region
 
 PROVINCES_URL = "https://raw.githubusercontent.com/chingchai/OpenGISData-Thailand/master/provinces.geojson"
@@ -16,9 +15,9 @@ def main():
     districts = requests.get(DISTRICTS_URL, timeout=30)
     districts.raise_for_status()
 
-    provinces_geojson = add_label_positions(tag_region(round_coordinates(
+    provinces_geojson = tag_region(round_coordinates(
         filter_boundaries(provinces.json(), ALL_PROVINCES, "pro_th"), 5
-    )))
+    ))
     districts_geojson = tag_region(round_coordinates(
         filter_boundaries(districts.json(), ALL_PROVINCES, "pro_th"), 5
     ))

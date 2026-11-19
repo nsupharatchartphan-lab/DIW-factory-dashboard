@@ -408,49 +408,6 @@ let geoLayer = null;
 let dotLayer = null;
 let tambonBorderLayer = null;
 let regionBoundaryLayer = null;
-let labelLayer = null;
-
-function clearLabelLayer() {
-  if (labelLayer) {
-    map.removeLayer(labelLayer);
-    labelLayer = null;
-  }
-}
-
-// Province name + count labels at the country-wide view, placed at a
-// pre-computed "label point" (not the raw polygon centroid) that's
-// already been nudged apart from its neighbors' labels wherever
-// provinces sit too close together for their names to fit side by
-// side (e.g. the Bangkok-metro cluster) — computed once at build time
-// in scripts/label_layout.py. A thin leader line is drawn back to the
-// province whenever its label had to move.
-function renderProvinceLabels(factories) {
-  clearLabelLayer();
-  labelLayer = L.layerGroup().addTo(map);
-  for (const feature of PROVINCES_GEOJSON.features) {
-    const props = feature.properties;
-    const count = countForProvince(factories, props.pro_th);
-    const hasLabelPoint = props.label_lat !== undefined && props.label_lon !== undefined;
-    const latlng = hasLabelPoint ? [props.label_lat, props.label_lon] : null;
-    if (!latlng) continue;
-
-    if (props.label_shifted) {
-      const leader = L.polyline(
-        [[props.label_anchor_lat, props.label_anchor_lon], latlng],
-        { color: '#9a9488', weight: 1, dashArray: '2,3', interactive: false }
-      );
-      labelLayer.addLayer(leader);
-    }
-
-    const tooltip = L.tooltip({
-      permanent: true, direction: 'center', className: 'map-label-tooltip',
-      opacity: 1, interactive: false,
-    })
-      .setLatLng(latlng)
-      .setContent(`<div class="map-label-name">${escapeHtml(props.pro_th)}</div><div class="map-label-count">${count}</div>`);
-    labelLayer.addLayer(tooltip);
-  }
-}
 
 function clearRegionBoundaryLayer() {
   if (regionBoundaryLayer) {
@@ -570,8 +527,8 @@ const REGION_COLOR_SCALE_10 = {
             '#eba366', '#e08f57', '#cf7a4a', '#b5663d', '#8f4f30'],
   'กลาง': ['#f1f4fb', '#dfe6f6', '#c7d4ef', '#abc0e6', '#8facdb',
            '#7398cf', '#5d84c0', '#4c71ac', '#3e5e92', '#314b75'],
-  'กทม.': ['#fdf1f6', '#fbdfec', '#f7c9e0', '#f1aed1', '#ea90c0',
-           '#df74ad', '#cf5c98', '#b84880', '#98386a', '#763054'],
+  'กทม.': ['#f6f6f5', '#eae9e7', '#dad9d6', '#c6c4c0', '#b1afaa',
+           '#9c9994', '#86837d', '#706d68', '#595652', '#423f3c'],
   'ตะวันออก': ['#f6f0fb', '#e9dcf5', '#dac5ee', '#c7a9e3', '#b38dd7',
                '#9f72ca', '#8a5cb8', '#73499c', '#5c3a7d', '#462c60'],
   'ตะวันออกเฉียงเหนือ': ['#f0faf1', '#dcf3e0', '#c2e9c9', '#a3deac', '#85d190',
@@ -663,6 +620,8 @@ function renderProvinceLevel(factories) {
       return { fillColor: scale.colorFor(count), weight: 1, color: '#555', fillOpacity: 0.75 };
     },
     onEachFeature: (feature, layer) => {
+      const count = countForProvince(factories, feature.properties.pro_th);
+      bindMapLabel(layer, feature.properties.pro_th, count);
       layer.on('click', () => {
         currentLevel = 'district';
         currentProvince = feature.properties.pro_th;
@@ -676,7 +635,6 @@ function renderProvinceLevel(factories) {
     map.fitBounds(geoLayer.getBounds());
   }
   renderRegionBoundaries();
-  renderProvinceLabels(factories);
   updateLegendRegions('จังหวัด: จำนวนโรงงาน (แบ่งสีตามภาค)', scalesByRegion);
   renderDots(factories);
   renderSidebar(factories);
@@ -685,7 +643,6 @@ function renderProvinceLevel(factories) {
 function renderDistrictLevel(factories) {
   clearGeoLayer();
   clearRegionBoundaryLayer();
-  clearLabelLayer();
 
   if (currentDistrict) {
     // A district has been picked: show only that one polygon, as a
