@@ -8,17 +8,17 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap">
 <style>
   :root {
-    --bg: #eef1f5;
+    --bg: #f3f1ec;
     --surface: #ffffff;
-    --border: #e1e6ed;
-    --text: #1b2430;
-    --text-muted: #6b7786;
-    --primary: #2f6fed;
-    --primary-dark: #1f56c4;
-    --primary-soft: #eaf1ff;
-    --radius: 10px;
-    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-    --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.10);
+    --border: #e4e0d6;
+    --text: #22281f;
+    --text-muted: #767d6f;
+    --primary: #b45309;
+    --primary-dark: #92400e;
+    --primary-soft: #fdf1e2;
+    --radius: 14px;
+    --shadow-sm: 0 1px 2px rgba(34, 40, 31, 0.07);
+    --shadow-md: 0 12px 32px rgba(34, 40, 31, 0.14);
   }
   * { box-sizing: border-box; }
   html, body {
@@ -34,8 +34,9 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 16px;
-    padding: 12px 20px;
-    background: var(--surface);
+    padding: 14px 22px;
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
     font-size: 13px;
@@ -277,6 +278,32 @@
     border: 1px solid rgba(0,0,0,0.1);
     flex: 0 0 auto;
   }
+
+  /* Permanent province/district name labels on the choropleth, used
+     instead of a dot per polygon. */
+  .leaflet-tooltip.map-label-tooltip {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    pointer-events: none;
+    text-align: center;
+    padding: 0;
+  }
+  .leaflet-tooltip.map-label-tooltip::before { display: none; }
+  .map-label-name {
+    font-weight: 600;
+    font-size: 12px;
+    color: #1c2a22;
+    text-shadow: 0 1px 0 rgba(255,255,255,.75), 0 -1px 0 rgba(255,255,255,.75),
+                 1px 0 0 rgba(255,255,255,.75), -1px 0 0 rgba(255,255,255,.75);
+  }
+  .map-label-count {
+    font-size: 11px;
+    font-weight: 500;
+    color: #3d4a41;
+    text-shadow: 0 1px 0 rgba(255,255,255,.75), 0 -1px 0 rgba(255,255,255,.75),
+                 1px 0 0 rgba(255,255,255,.75), -1px 0 0 rgba(255,255,255,.75);
+  }
 </style>
 </head>
 <body>
@@ -366,7 +393,11 @@ let dotLayer = null;
 
 function dotRadius(count) {
   if (count <= 0) return 0;
-  return Math.min(2 + Math.sqrt(count) * 0.7, 18);
+  // Compressed at the top end (big counts don't balloon) and expanded
+  // at the bottom end (small counts stay clearly distinguishable from
+  // each other) — a tight cluster of same-sized dots is what caused
+  // the "too many little circles" look.
+  return Math.min(3 + Math.sqrt(count) * 1.1, 14);
 }
 
 function clearDotLayer() {
@@ -382,10 +413,10 @@ function addDot(lat, lon, count, label) {
   // polygon underneath it (the polygon already carries the tooltip).
   const marker = L.circleMarker([lat, lon], {
     radius: dotRadius(count),
-    color: '#08306b',
+    color: '#92400e',
     weight: 1,
-    fillColor: '#f03b20',
-    fillOpacity: 0.65,
+    fillColor: '#f59e0b',
+    fillOpacity: 0.75,
     interactive: false,
   });
   dotLayer.addLayer(marker);
@@ -395,29 +426,11 @@ function renderDots(factories) {
   clearDotLayer();
   dotLayer = L.layerGroup().addTo(map);
 
-  if (currentLevel === 'province') {
-    // Dots at the province-overview level show district-level counts
-    // (not province totals) — the choropleth fill already encodes the
-    // province total, so the dots add the finer-grained detail.
-    for (const feature of DISTRICTS_GEOJSON.features) {
-      const province = feature.properties.pro_th;
-      const amphoe = feature.properties.amp_th;
-      addDot(feature.properties.lat, feature.properties.lon,
-        countForDistrict(factories, province, amphoe), amphoe);
-    }
-    return;
-  }
-
-  if (currentLevel === 'district' && currentProvince && !currentDistrict) {
-    for (const feature of DISTRICTS_GEOJSON.features) {
-      if (feature.properties.pro_th !== currentProvince) continue;
-      const amphoe = feature.properties.amp_th;
-      addDot(feature.properties.lat, feature.properties.lon,
-        countForDistrict(factories, currentProvince, amphoe), amphoe);
-    }
-    return;
-  }
-
+  // Dots only appear once drilled into a single district (tambon level).
+  // At the province- and district-overview levels, the choropleth fill
+  // plus the permanent name labels already carry the information — a
+  // dot per polygon at those levels just produced a dense cluster of
+  // same-sized circles.
   if (currentLevel === 'district' && currentProvince && currentDistrict) {
     const inDistrict = factories.filter(
       f => f.province === currentProvince && f.amphoe === currentDistrict
@@ -436,12 +449,19 @@ function renderDots(factories) {
 }
 
 function getColor(count) {
-  if (count === 0) return '#eeeeee';
-  if (count < 100) return '#c6dbef';
-  if (count < 250) return '#6baed6';
-  if (count < 500) return '#2171b5';
-  if (count < 750) return '#08519c';
-  return '#08306b';
+  if (count === 0) return '#e7e3d8';
+  if (count < 100) return '#bfe3d6';
+  if (count < 250) return '#74c6ad';
+  if (count < 500) return '#2a9d7f';
+  if (count < 750) return '#187a63';
+  return '#0d4f40';
+}
+
+function bindMapLabel(layer, name, count) {
+  layer.bindTooltip(
+    `<div class="map-label-name">${escapeHtml(name)}</div><div class="map-label-count">${count}</div>`,
+    { permanent: true, direction: 'center', className: 'map-label-tooltip', opacity: 1 }
+  );
 }
 
 function countForProvince(factories, province) {
@@ -468,7 +488,7 @@ function renderProvinceLevel(factories) {
     },
     onEachFeature: (feature, layer) => {
       const count = countForProvince(factories, feature.properties.pro_th);
-      layer.bindTooltip(`${feature.properties.pro_th}: ${count} โรงงาน`);
+      bindMapLabel(layer, feature.properties.pro_th, count);
       layer.on('click', () => {
         currentLevel = 'district';
         currentProvince = feature.properties.pro_th;
@@ -495,7 +515,7 @@ function renderDistrictLevel(factories) {
     },
     onEachFeature: (feature, layer) => {
       const count = countForDistrict(factories, feature.properties.pro_th, feature.properties.amp_th);
-      layer.bindTooltip(`${feature.properties.amp_th}: ${count} โรงงาน`);
+      bindMapLabel(layer, feature.properties.amp_th, count);
       layer.on('click', () => {
         currentDistrict = feature.properties.amp_th;
         renderDots(factories);
