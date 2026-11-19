@@ -473,6 +473,7 @@ function renderDots(factories) {
       onEachFeature: (feature, layer) => {
         const count = countByTambon[feature.properties.tam_th] || 0;
         layer.bindTooltip(`${feature.properties.tam_th}: ${count} โรงงาน`);
+        layer.on('click', () => scrollSidebarToTambon(feature.properties.tam_th));
       },
     }).addTo(map);
 
@@ -575,6 +576,29 @@ function renderProvinceLevel(factories) {
 
 function renderDistrictLevel(factories) {
   clearGeoLayer();
+
+  if (currentDistrict) {
+    // A district has been picked: show only that one polygon, as a
+    // plain backdrop frame — the tambon boundary/dot layer (added by
+    // renderDots below) carries the actual data at this zoom level,
+    // and the neighboring districts are removed rather than just
+    // staying colored around it.
+    const selected = DISTRICTS_GEOJSON.features.find(
+      f => f.properties.pro_th === currentProvince && f.properties.amp_th === currentDistrict
+    );
+    if (selected) {
+      geoLayer = L.geoJSON(selected, {
+        style: { fillColor: 'transparent', weight: 2, color: '#7c3f0a', fillOpacity: 0 },
+      }).addTo(map);
+      if (geoLayer.getBounds().isValid()) {
+        map.fitBounds(geoLayer.getBounds());
+      }
+    }
+    renderDots(factories);
+    renderSidebar(factories);
+    return;
+  }
+
   const districtFeatures = {
     type: 'FeatureCollection',
     features: DISTRICTS_GEOJSON.features.filter(f => f.properties.pro_th === currentProvince)
@@ -593,8 +617,7 @@ function renderDistrictLevel(factories) {
       bindMapLabel(layer, feature.properties.amp_th, count);
       layer.on('click', () => {
         currentDistrict = feature.properties.amp_th;
-        renderDots(factories);
-        renderSidebar(factories);
+        renderDistrictLevel(factories);
       });
     }
   }).addTo(map);
@@ -665,7 +688,7 @@ function renderSidebar(factories) {
     `<p class="hint">${matching.length} โรงงาน</p>`;
 
   for (const tambon of Object.keys(byTambon).sort()) {
-    html += `<div class="tambon-group"><h3>ต.${escapeHtml(tambon)}</h3>`;
+    html += `<div class="tambon-group" data-tambon="${escapeHtml(tambon)}"><h3>ต.${escapeHtml(tambon)}</h3>`;
     for (const f of byTambon[tambon]) {
       html +=
         `<div class="factory-item">` +
@@ -678,6 +701,14 @@ function renderSidebar(factories) {
   }
 
   el.innerHTML = html;
+}
+
+// Clicking a tambon's shape on the map scrolls the sidebar's list up
+// to that tambon's section, since the full list for a district can run
+// well below the fold.
+function scrollSidebarToTambon(tambon) {
+  const el = document.querySelector(`.tambon-group[data-tambon="${CSS.escape(tambon)}"]`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 const DETAIL_FIELDS = [
