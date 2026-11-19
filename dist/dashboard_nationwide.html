@@ -318,6 +318,17 @@
     text-shadow: 0 1px 0 rgba(255,255,255,.75), 0 -1px 0 rgba(255,255,255,.75),
                  1px 0 0 rgba(255,255,255,.75), -1px 0 0 rgba(255,255,255,.75);
   }
+
+  /* Draggable province-name label (country-wide view) — centered on
+     its marker point via the transform below, since L.divIcon has no
+     built-in centering for free-sized content. */
+  .province-label-icon {
+    transform: translate(-50%, -50%);
+    text-align: center;
+    cursor: grab;
+    white-space: nowrap;
+  }
+  .province-label-icon:active { cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -368,6 +379,9 @@
     <input type="text" id="search-input" placeholder="ค้นหาชื่อ/กิจการ" oninput="onFilterChange()">
     <button type="button" class="clear-btn" onclick="clearSearch()">ล้างคำค้นหา</button>
   </div>
+  <div class="group">
+    <button type="button" class="clear-btn" onclick="resetLabelOverrides()">รีเซ็ตตำแหน่งป้ายชื่อจังหวัด</button>
+  </div>
 </div>
 <div id="main-area">
 <div id="app">
@@ -408,6 +422,61 @@ let geoLayer = null;
 let dotLayer = null;
 let tambonBorderLayer = null;
 let regionBoundaryLayer = null;
+let labelLayer = null;
+
+// Province name labels are draggable at the country-wide view — drag
+// one wherever reads best, and the new spot is remembered (per
+// browser, via localStorage) so it's still there next time this file
+// is opened.
+const LABEL_POSITIONS_KEY = 'diw_nationwide_label_positions_v1';
+
+function loadLabelOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(LABEL_POSITIONS_KEY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveLabelOverride(province, lat, lng) {
+  try {
+    const all = loadLabelOverrides();
+    all[province] = [lat, lng];
+    localStorage.setItem(LABEL_POSITIONS_KEY, JSON.stringify(all));
+  } catch (e) {
+    // localStorage unavailable (private window, blocked site data, …) —
+    // dragging still works for this session, it just won't be remembered.
+  }
+}
+
+function resetLabelOverrides() {
+  try { localStorage.removeItem(LABEL_POSITIONS_KEY); } catch (e) {}
+  renderMap(lastFactories);
+}
+
+function clearLabelLayer() {
+  if (labelLayer) {
+    map.removeLayer(labelLayer);
+    labelLayer = null;
+  }
+}
+
+function addDraggableProvinceLabel(province, count, defaultLatLng) {
+  const overrides = loadLabelOverrides();
+  const saved = overrides[province];
+  const latlng = saved ? L.latLng(saved[0], saved[1]) : defaultLatLng;
+  const icon = L.divIcon({
+    className: 'province-label-icon',
+    html: `<div class="map-label-name">${escapeHtml(province)}</div><div class="map-label-count">${count}</div>`,
+    iconSize: [0, 0],
+  });
+  const marker = L.marker(latlng, { icon, draggable: true, keyboard: false });
+  marker.on('dragend', () => {
+    const pos = marker.getLatLng();
+    saveLabelOverride(province, pos.lat, pos.lng);
+  });
+  labelLayer.addLayer(marker);
+}
 
 function clearRegionBoundaryLayer() {
   if (regionBoundaryLayer) {
@@ -606,6 +675,8 @@ function clearGeoLayer() {
 
 function renderProvinceLevel(factories) {
   clearGeoLayer();
+  clearLabelLayer();
+  labelLayer = L.layerGroup().addTo(map);
   const regionsPresent = [...new Set(PROVINCES_GEOJSON.features.map(f => f.properties.region))];
   const scalesByRegion = {};
   for (const region of regionsPresent) {
@@ -621,7 +692,7 @@ function renderProvinceLevel(factories) {
     },
     onEachFeature: (feature, layer) => {
       const count = countForProvince(factories, feature.properties.pro_th);
-      bindMapLabel(layer, feature.properties.pro_th, count);
+      addDraggableProvinceLabel(feature.properties.pro_th, count, layer.getBounds().getCenter());
       layer.on('click', () => {
         currentLevel = 'district';
         currentProvince = feature.properties.pro_th;
@@ -643,6 +714,7 @@ function renderProvinceLevel(factories) {
 function renderDistrictLevel(factories) {
   clearGeoLayer();
   clearRegionBoundaryLayer();
+  clearLabelLayer();
 
   if (currentDistrict) {
     // A district has been picked: show only that one polygon, as a
