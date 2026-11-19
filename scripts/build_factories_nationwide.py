@@ -157,7 +157,7 @@ def build_meta(factories: list) -> dict:
 
 
 def main():
-    factories = load_factories_from_workbook("Responsible factories section6.xlsx")
+    factories = load_factories_from_workbook("Responsible factories section6 active.xlsx")
 
     with open("data/processed/factories_nationwide.json", "w", encoding="utf-8") as f:
         json.dump(factories, f, ensure_ascii=False)
