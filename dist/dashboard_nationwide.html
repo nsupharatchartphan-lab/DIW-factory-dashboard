@@ -351,21 +351,53 @@
      instead of beside it, let the toolbar wrap freely, and keep
      popovers from overflowing the viewport width. */
   @media (max-width: 768px) {
-    #toolbar { padding: 10px 12px; gap: 10px; font-size: 12.5px; }
+    #toolbar { padding: 8px 10px; gap: 8px; font-size: 12.5px; }
     #toolbar input[type="number"] { width: 72px; }
     #search-input { width: 140px; }
+    #reset-labels-group { display: none; } /* labels aren't draggable on a phone */
+
     #app { flex-direction: column; }
-    #map { flex: 1 1 auto; min-height: 220px; }
+    #map { flex: 1 1 auto; min-height: 280px; }
+
+    /* Smaller choropleth labels — the full-size font that reads fine
+       on a desktop-sized province polygon overruns a phone-sized one. */
+    .map-label-name { font-size: 9.5px; }
+    .map-label-count { font-size: 8.5px; }
+
+    /* Bigger, easier-to-hit zoom buttons and a thicker polygon border
+       so province/district shapes are easier to tap precisely. */
+    .leaflet-control-zoom a { width: 38px; height: 38px; line-height: 38px; font-size: 18px; }
+    .leaflet-touch .leaflet-bar a { width: 38px; height: 38px; line-height: 38px; }
+
+    /* The sidebar only has a one-line hint at the country-wide view —
+       collapse it there so the map gets most of the screen, and only
+       expand once there's an actual factory list to show. */
     #sidebar {
       width: 100%;
-      flex: 1 1 40%;
-      max-height: 45vh;
+      flex: 1 1 38%;
+      max-height: 40vh;
       border-left: none;
       border-top: 1px solid var(--border);
+      transition: max-height .15s ease;
     }
+    #sidebar.sidebar-mini { flex: 0 0 auto; max-height: 52px; overflow: hidden; }
+
     .dropdown-panel { width: min(260px, 88vw); }
     #detail-card { padding: 20px 18px; }
-    .map-legend { max-width: 200px; font-size: 11px; }
+    .map-legend { max-width: 190px; font-size: 11px; padding: 8px 10px; }
+    .map-legend-region-name { width: 86px; }
+
+    /* A bit more breathing room and slightly larger text in the
+       sidebar/detail panels, which read as cramped at the default
+       desktop sizing on a phone screen. */
+    #sidebar { font-size: 14px; }
+    #sidebar h2 { font-size: 18px; }
+    .factory-item { font-size: 14px; margin-bottom: 12px; padding-bottom: 12px; }
+    .factory-item .fhp { font-size: 13px; }
+    .tambon-group { padding: 14px; }
+    .tambon-group h3 { font-size: 14px; }
+    #detail-card dt { font-size: 13px; }
+    #detail-card dd { font-size: 15px; }
   }
 </style>
 </head>
@@ -417,7 +449,7 @@
     <input type="text" id="search-input" placeholder="ค้นหาชื่อ/กิจการ" oninput="onFilterChange()">
     <button type="button" class="clear-btn" onclick="clearSearch()">ล้างคำค้นหา</button>
   </div>
-  <div class="group">
+  <div class="group" id="reset-labels-group">
     <button type="button" class="clear-btn" onclick="resetLabelOverrides()">รีเซ็ตตำแหน่งป้ายชื่อจังหวัด</button>
   </div>
 </div>
@@ -499,8 +531,18 @@ function clearLabelLayer() {
   }
 }
 
+// On a phone-sized screen labels aren't draggable and ignore any
+// saved override — a label dragged on a desktop screen can easily
+// land outside a province's much smaller on-screen shape at a phone's
+// typical zoom, and a touch-drag on the label itself fights with
+// panning the map underneath it.
+function isMobileLayout() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
 function addDraggableProvinceLabel(province, count, defaultLatLng) {
-  const overrides = loadLabelOverrides();
+  const mobile = isMobileLayout();
+  const overrides = mobile ? {} : loadLabelOverrides();
   const saved = overrides[province];
   const latlng = saved ? L.latLng(saved[0], saved[1]) : defaultLatLng;
   const icon = L.divIcon({
@@ -508,11 +550,13 @@ function addDraggableProvinceLabel(province, count, defaultLatLng) {
     html: `<div class="map-label-name">${escapeHtml(province)}</div><div class="map-label-count">${count}</div>`,
     iconSize: [0, 0],
   });
-  const marker = L.marker(latlng, { icon, draggable: true, keyboard: false });
-  marker.on('dragend', () => {
-    const pos = marker.getLatLng();
-    saveLabelOverride(province, pos.lat, pos.lng);
-  });
+  const marker = L.marker(latlng, { icon, draggable: !mobile, keyboard: false });
+  if (!mobile) {
+    marker.on('dragend', () => {
+      const pos = marker.getLatLng();
+      saveLabelOverride(province, pos.lat, pos.lng);
+    });
+  }
   labelLayer.addLayer(marker);
 }
 
@@ -841,6 +885,10 @@ function escapeHtml(value) {
 
 function renderSidebar(factories) {
   const el = document.getElementById('sidebar-content');
+  // On a phone, the sidebar only shows a one-line hint at the
+  // country-wide view — collapse it there so the map keeps most of
+  // the screen, expanding again once there's an actual list to show.
+  document.getElementById('sidebar').classList.toggle('sidebar-mini', currentLevel === 'province');
 
   if (currentLevel === 'province') {
     el.innerHTML = '<p class="hint">คลิกจังหวัดบนแผนที่เพื่อดูอำเภอ</p>';
