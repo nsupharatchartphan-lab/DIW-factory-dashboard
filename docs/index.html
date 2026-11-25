@@ -265,6 +265,17 @@
   .maps-pin { margin-left: 5px; text-decoration: none; font-size: 12px; }
 
   #table-view { display: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px; box-sizing: border-box; }
+  .table-search-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .table-search-row input[type="text"] {
+    width: 280px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    background: var(--surface);
+    outline: none;
+  }
+  .table-search-row input[type="text"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
   #table-view table {
     border-collapse: separate;
     border-spacing: 0;
@@ -448,6 +459,8 @@
     .bar-row .bar-label { width: 92px; font-size: 11.5px; }
     .region-summary-table { font-size: 11.5px; }
     .region-summary-table th, .region-summary-table td { padding: 6px 8px; }
+    .table-search-row { flex-wrap: wrap; }
+    .table-search-row input[type="text"] { width: 100%; }
   }
 </style>
 </head>
@@ -538,6 +551,7 @@ let currentDistrict = null;
 let lastFactories = FACTORIES;
 let currentView = 'map';
 const expandedGroups = new Set();
+let tableLocationSearch = '';
 
 const map = L.map('map').setView([13.0, 101.0], 6);
 let geoLayer = null;
@@ -1432,6 +1446,29 @@ function groupKey(province, amphoe) {
   return province + '|' + amphoe;
 }
 
+// Searches จังหวัด/อำเภอ/ตำบล (province, district, sub-district) names
+// together — a province or district match keeps the whole group, a
+// sub-district-only match also auto-expands that group so the
+// matching ตำบล is visible without an extra click.
+function onTableLocationSearch(value) {
+  tableLocationSearch = value;
+  const input = document.getElementById('table-location-search');
+  const caret = input ? input.selectionStart : null;
+  renderTable(getFilteredFactories());
+  const newInput = document.getElementById('table-location-search');
+  if (newInput) {
+    newInput.focus();
+    if (caret !== null) newInput.setSelectionRange(caret, caret);
+  }
+}
+
+function clearTableLocationSearch() {
+  tableLocationSearch = '';
+  renderTable(getFilteredFactories());
+  const input = document.getElementById('table-location-search');
+  if (input) input.focus();
+}
+
 function renderTable(factories) {
   // Seed every (province, amphoe) group from the full FACTORIES set, not
   // just the filtered one, so a district with zero matches still shows
@@ -1446,12 +1483,36 @@ function renderTable(factories) {
     groups[key].factories.push(f);
   }
 
-  const sortedKeys = Object.keys(groups).sort((a, b) => {
+  let sortedKeys = Object.keys(groups).sort((a, b) => {
     const ga = groups[a], gb = groups[b];
     return ga.province.localeCompare(gb.province) || ga.amphoe.localeCompare(gb.amphoe);
   });
 
-  let html = '<table><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>จำนวนโรงงาน</th></tr></thead><tbody>';
+  const query = tableLocationSearch.trim();
+  if (query) {
+    sortedKeys = sortedKeys.filter(key => {
+      const g = groups[key];
+      if (g.province.includes(query) || g.amphoe.includes(query)) return true;
+      return g.factories.some(f => f.tambon && f.tambon.includes(query));
+    });
+    for (const key of sortedKeys) {
+      const g = groups[key];
+      if (!g.province.includes(query) && !g.amphoe.includes(query)) {
+        expandedGroups.add(key);
+      }
+    }
+  }
+
+  let html =
+    `<div class="table-search-row">` +
+    `<input type="text" id="table-location-search" value="${escapeHtml(tableLocationSearch)}" ` +
+    `placeholder="ค้นหาจังหวัด/อำเภอ-เขต/ตำบล-แขวง" oninput="onTableLocationSearch(this.value)">` +
+    `<button type="button" class="clear-btn" onclick="clearTableLocationSearch()">ล้างคำค้นหา</button>` +
+    `</div>`;
+  html += '<table><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>จำนวนโรงงาน</th></tr></thead><tbody>';
+  if (sortedKeys.length === 0) {
+    html += `<tr><td colspan="3" class="hint">ไม่พบจังหวัด/อำเภอ/ตำบลที่ตรงกับคำค้นหา</td></tr>`;
+  }
   for (const key of sortedKeys) {
     const group = groups[key];
     html += `<tr class="group-row" onclick="toggleGroup('${key}')">` +
