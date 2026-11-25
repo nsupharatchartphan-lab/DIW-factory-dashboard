@@ -306,6 +306,7 @@
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
     padding: 16px 18px;
+    overflow-x: auto;
   }
   .bar-chart-card h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
   .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 12.5px; }
@@ -320,6 +321,12 @@
   .bar-row .bar-track { flex: 1 1 auto; background: var(--bg); border-radius: 4px; height: 14px; overflow: hidden; }
   .bar-row .bar-fill { height: 100%; border-radius: 4px; }
   .bar-row .bar-value { width: 46px; flex: 0 0 auto; text-align: right; color: var(--text-muted); font-size: 12px; }
+
+  .region-summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .region-summary-table th, .region-summary-table td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  .region-summary-table th:first-child, .region-summary-table td:first-child { text-align: left; }
+  .region-summary-table th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+  .region-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 
   .map-legend {
     background: var(--surface);
@@ -439,6 +446,8 @@
     .stat-cards { grid-template-columns: repeat(2, 1fr); }
     .stat-card .stat-value { font-size: 21px; }
     .bar-row .bar-label { width: 92px; font-size: 11.5px; }
+    .region-summary-table { font-size: 11.5px; }
+    .region-summary-table th, .region-summary-table td { padding: 6px 8px; }
   }
 </style>
 </head>
@@ -1290,18 +1299,37 @@ function renderBarChartCard(title, entries, colorFor) {
   return html;
 }
 
+// Horsepower buckets for the size-distribution chart — rough small/
+// medium/large bands rather than a fixed bin width, since factory
+// horsepower spans a couple of orders of magnitude.
+const HP_BUCKETS = [
+  [0, 50, '<50'],
+  [50, 200, '50–200'],
+  [200, 500, '200–500'],
+  [500, 1000, '500–1,000'],
+  [1000, Infinity, '1,000+'],
+];
+
+function regionColorFor(region) {
+  return (REGION_COLOR_SCALE_10[region] || REGION_COLOR_SCALE_10['กลาง'])[7];
+}
+
 function renderAnalysis(factories) {
   const el = document.getElementById('analysis-view');
 
   const totalCount = factories.length;
   let totalHp = 0, totalCapital = 0, totalWorkers = 0;
+  let countWithHp = 0, countWithCapital = 0, countWithGps = 0, countNeverInspected = 0;
   for (const f of factories) {
-    if (typeof f.hp_registered === 'number') totalHp += f.hp_registered;
-    if (typeof f.capital_total === 'number') totalCapital += f.capital_total;
+    if (typeof f.hp_registered === 'number') { totalHp += f.hp_registered; countWithHp++; }
+    if (typeof f.capital_total === 'number') { totalCapital += f.capital_total; countWithCapital++; }
     if (typeof f.workers_total === 'number') totalWorkers += f.workers_total;
+    if (f.gps_lat != null && f.gps_lng != null) countWithGps++;
+    if (!f.hp_inspected) countNeverInspected++;
   }
   const provinceCounts = countBy(factories, f => f.province);
   const provincesRepresented = Object.keys(provinceCounts).length;
+  const pct = (n, d) => d > 0 ? Math.round((n / d) * 100) : 0;
 
   const statCards = [
     [totalCount.toLocaleString('th-TH'), 'จำนวนโรงงาน (ตามตัวกรองปัจจุบัน)'],
@@ -1309,6 +1337,10 @@ function renderAnalysis(factories) {
     [(totalCapital / 1e6).toLocaleString('th-TH', { maximumFractionDigits: 1 }) + ' ล้านบาท', 'เงินทุนรวม'],
     [totalWorkers.toLocaleString('th-TH'), 'จำนวนคนงานรวม'],
     [provincesRepresented.toLocaleString('th-TH'), 'จังหวัดที่มีโรงงาน (จาก 77)'],
+    [countWithHp ? Math.round(totalHp / countWithHp).toLocaleString('th-TH') : '-', 'แรงม้าเฉลี่ย/โรงงาน'],
+    [countWithCapital ? Math.round(totalCapital / countWithCapital / 1e3).toLocaleString('th-TH') + ' พันบาท' : '-', 'เงินทุนเฉลี่ย/โรงงาน'],
+    [`${pct(countWithGps, totalCount)}%`, 'มีพิกัด GPS'],
+    [`${pct(countNeverInspected, totalCount)}%`, 'ยังไม่มีค่าแรงม้าตรวจพบ'],
   ];
 
   let html = '<div class="stat-cards">';
@@ -1319,6 +1351,20 @@ function renderAnalysis(factories) {
 
   const typeCounts = countBy(factories, f => f.type_code);
   const regionCounts = countBy(factories, f => f.region);
+  const districtCounts = countBy(factories, f => groupKey(f.province, f.amphoe));
+  const districtLabel = key => {
+    const [province, amphoe] = key.split('|');
+    return `${amphoe}, ${province}`;
+  };
+  const districtRegion = {};
+  for (const f of factories) districtRegion[groupKey(f.province, f.amphoe)] = f.region;
+
+  const hpBucketCounts = {};
+  for (const f of factories) {
+    if (typeof f.hp_registered !== 'number') continue;
+    const bucket = HP_BUCKETS.find(([lo, hi]) => f.hp_registered >= lo && f.hp_registered < hi);
+    if (bucket) hpBucketCounts[bucket[2]] = (hpBucketCounts[bucket[2]] || 0) + 1;
+  }
 
   html += '<div class="analysis-sections">';
   html += renderBarChartCard(
@@ -1326,8 +1372,15 @@ function renderAnalysis(factories) {
     topEntries(provinceCounts, 10),
     province => {
       const feature = PROVINCES_GEOJSON.features.find(f => f.properties.pro_th === province);
-      const region = feature ? feature.properties.region : 'กลาง';
-      return (REGION_COLOR_SCALE_10[region] || REGION_COLOR_SCALE_10['กลาง'])[7];
+      return regionColorFor(feature ? feature.properties.region : 'กลาง');
+    }
+  );
+  html += renderBarChartCard(
+    '10 อำเภอที่มีโรงงานมากที่สุด',
+    topEntries(districtCounts, 10).map(([key, count]) => [districtLabel(key), count]),
+    label => {
+      const key = Object.keys(districtRegion).find(k => districtLabel(k) === label);
+      return regionColorFor(key ? districtRegion[key] : 'กลาง');
     }
   );
   html += renderBarChartCard(
@@ -1336,14 +1389,41 @@ function renderAnalysis(factories) {
     () => 'var(--primary)'
   );
   html += renderBarChartCard(
+    'การกระจายตามช่วงแรงม้า',
+    HP_BUCKETS.map(([, , label]) => [label, hpBucketCounts[label] || 0]).filter(([, c]) => c > 0),
+    () => 'var(--primary)'
+  );
+  html += renderBarChartCard(
     'จำนวนโรงงานแยกตามภาค',
     REGION_ORDER.filter(r => regionCounts[r]).map(r => [REGION_LABELS[r], regionCounts[r]]),
     label => {
       const region = REGION_ORDER.find(r => REGION_LABELS[r] === label);
-      return (REGION_COLOR_SCALE_10[region] || REGION_COLOR_SCALE_10['กลาง'])[7];
+      return regionColorFor(region);
     }
   );
   html += '</div>';
+
+  // A denser per-region table — count, total/average HP, and total
+  // capital side by side, rather than just one number per region.
+  html += '<div class="bar-chart-card" style="margin-top:20px;"><h3>สรุปตามภาค</h3>';
+  html += '<table class="region-summary-table"><thead><tr>' +
+    '<th>ภาค</th><th>จำนวนโรงงาน</th><th>แรงม้ารวม</th><th>แรงม้าเฉลี่ย</th><th>เงินทุนรวม (ล้านบาท)</th>' +
+    '</tr></thead><tbody>';
+  for (const region of REGION_ORDER) {
+    if (!regionCounts[region]) continue;
+    const inRegion = factories.filter(f => f.region === region);
+    const hpSum = inRegion.reduce((sum, f) => sum + (typeof f.hp_registered === 'number' ? f.hp_registered : 0), 0);
+    const hpCount = inRegion.filter(f => typeof f.hp_registered === 'number').length;
+    const capitalSum = inRegion.reduce((sum, f) => sum + (typeof f.capital_total === 'number' ? f.capital_total : 0), 0);
+    html += `<tr>` +
+      `<td><span class="region-dot" style="background:${regionColorFor(region)}"></span>${escapeHtml(REGION_LABELS[region])}</td>` +
+      `<td>${regionCounts[region].toLocaleString('th-TH')}</td>` +
+      `<td>${hpSum.toLocaleString('th-TH')}</td>` +
+      `<td>${hpCount ? Math.round(hpSum / hpCount).toLocaleString('th-TH') : '-'}</td>` +
+      `<td>${(capitalSum / 1e6).toLocaleString('th-TH', { maximumFractionDigits: 1 })}</td>` +
+      `</tr>`;
+  }
+  html += '</tbody></table></div>';
 
   el.innerHTML = html;
 }
