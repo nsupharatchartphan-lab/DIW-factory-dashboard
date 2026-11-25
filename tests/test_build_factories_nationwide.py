@@ -14,7 +14,7 @@ HEADERS = [
     "ไปรษณีย์", "โทรศัพท์", "เงินทุนรวม", "ค่าอาคาร", "ค่าที่ดิน", "ค่าเครื่องจักร",
     "ทุนหมุนเวียน", "คนงานชาย", "คนงานหญิง", "คนงานรวม", "แรงม้า", "แรงม้าตรวจพบ",
     "กำลังผลิต", "หน่วย", "ทะเบียนพาณิชย์", "เลขผู้เสียภาษี", "ประเภท",
-    "GPS_lat", "GPS_lng",
+    "พื้นที่โรงงาน", "พื้นที่อาคาร", "GPS_lat", "GPS_lng",
 ]
 
 
@@ -44,9 +44,9 @@ class TestLoadFactoriesFromWorkbook(unittest.TestCase):
     def test_maps_columns_by_header_name_and_tags_region(self):
         row = [1, "3-10(1)-6/55", None, 999, "โรงงานทดสอบ", "-", "ทดสอบ",
                "1", "-", "-", "ถนนทดสอบ", "ตำบลทดสอบ", "ลาดกระบัง",
-               "กรุงเทพมหานคร", 10520, None, 0, 0, 0, 0, 0, 0, 0, 0,
-               138, 138, None, "ตัน/ปี", None, None, "-01001-",
-               13.736717, 100.523186]
+               "กรุงเทพมหานคร", 10520, None, 17000000, 0, 0, 0, 0, 0, 0, 12,
+               138, 138, 500, "ตัน/ปี", None, None, "-01001-",
+               7750, 1870, 13.736717, 100.523186]
         path = _write_workbook([row])
         try:
             factories = load_factories_from_workbook(path)
@@ -62,13 +62,19 @@ class TestLoadFactoriesFromWorkbook(unittest.TestCase):
         self.assertEqual(factory["hp_registered"], 138)
         self.assertEqual(factory["gps_lat"], 13.736717)
         self.assertEqual(factory["gps_lng"], 100.523186)
+        self.assertEqual(factory["capital_total"], 17000000)
+        self.assertEqual(factory["workers_total"], 12)
+        self.assertEqual(factory["factory_area"], 7750)
+        self.assertEqual(factory["building_area"], 1870)
+        self.assertEqual(factory["production_capacity"], 500)
+        self.assertEqual(factory["production_unit"], "ตัน/ปี")
 
     def test_discards_gps_outside_thailands_bounding_box(self):
         row = [1, "3-10(1)-6/55", None, 999, "โรงงานทดสอบ", "-", "ทดสอบ",
                "1", "-", "-", "ถนนทดสอบ", "ตำบลทดสอบ", "ลาดกระบัง",
                "กรุงเทพมหานคร", 10520, None, 0, 0, 0, 0, 0, 0, 0, 0,
                138, 138, None, "ตัน/ปี", None, None, "-01001-",
-               "-", "16/01/1470"]
+               None, None, "-", "16/01/1470"]
         path = _write_workbook([row])
         try:
             factories = load_factories_from_workbook(path)
@@ -83,7 +89,8 @@ class TestLoadFactoriesFromWorkbook(unittest.TestCase):
         row = [1, "3-43(1)-11/64", None, 999, "โรงปุ๋ยทดสอบ", "-", "ผลิตปุ๋ย",
                "1", "-", "-", "ถนนทดสอบ", "ตำบลทดสอบ", "เมืองเชียงใหม่",
                "เชียงใหม่", 50000, None, 0, 0, 0, 0, 0, 0, 0, 0,
-               100, 100, None, "ตัน/ปี", None, None, "-01001-"]
+               100, 100, None, "ตัน/ปี", None, None, "-01001-",
+               None, None]
         path = _write_workbook([row])
         try:
             factories = load_factories_from_workbook(path)

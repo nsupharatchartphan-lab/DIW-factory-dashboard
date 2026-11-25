@@ -29,7 +29,17 @@ HEADER_MAP = {
     "tax_id": "เลขผู้เสียภาษี",
     "gps_lat": "GPS_lat",
     "gps_lng": "GPS_lng",
+    "capital_total": "เงินทุนรวม",
+    "workers_total": "คนงานรวม",
+    "factory_area": "พื้นที่โรงงาน",
+    "building_area": "พื้นที่อาคาร",
+    "production_capacity": "กำลังผลิต",
+    "production_unit": "หน่วย",
 }
+
+
+def _clean_number(value):
+    return value if isinstance(value, (int, float)) else None
 
 # Thailand's rough bounding box — some rows have GPS_lat/GPS_lng cells
 # shifted into other columns (stray text, dates) by inconsistent data
@@ -117,6 +127,12 @@ def load_factories_from_workbook(path: str) -> list:
             "tax_id": _clean_str(row[columns["tax_id"]]),
             "gps_lat": gps_lat,
             "gps_lng": gps_lng,
+            "capital_total": _clean_number(row[columns["capital_total"]]),
+            "workers_total": _clean_number(row[columns["workers_total"]]),
+            "factory_area": _clean_number(row[columns["factory_area"]]),
+            "building_area": _clean_number(row[columns["building_area"]]),
+            "production_capacity": _clean_number(row[columns["production_capacity"]]),
+            "production_unit": _clean_str(row[columns["production_unit"]]),
         }
         factories.append(factory)
     wb.close()
